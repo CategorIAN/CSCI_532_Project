@@ -1,5 +1,7 @@
 from functools import reduce
 import numpy as np
+import random
+import pandas as pd
 
 class MatrixProduct:
     def __init__(self, dimensionList):
@@ -8,6 +10,8 @@ class MatrixProduct:
             self.n = len(dimensionList)
             self.table = np.vectorize(lambda n: int(n))(np.zeros((self.n, self.n)))
             self.dynamic = lambda state: self.table[state[0], state[1]]
+            self.stateSpace = self.getStateSpace()
+            self.finalState = (0, self.n - 1)
         else:
             raise Exception("Dimensions do not match.")
 
@@ -20,7 +24,7 @@ class MatrixProduct:
                 return (p[1] == q[0]) and go(q, dimList[1:])
         return go(dimensionList[0], dimensionList[1:]) if len(dimensionList) > 0 else False
 
-    def stateSpace(self):
+    def getStateSpace(self):
         def dSpace(d):
             return [(i, i + d) for i in range(self.n - d)]
         return reduce(lambda l1, l2: l1 + l2, [dSpace(d) for d in range(self.n)])
@@ -63,6 +67,18 @@ class MatrixProduct:
 
     def featVec(self, state):
         return np.array([state[0], state[1]])
+
+    def netData(self, states):
+        (iList, jList) = [list(t) for t in list(zip(*states))]
+        return pd.DataFrame({"i": iList, "j": jList})
+
+    def run(self, nn, D, eps, eta):
+        (S, V) = (set(), {self.finalState})
+        Q = set(random.sample(self.stateSpace, 5))|{self.finalState}
+        def go(D, S, V, Q):
+            if len(Q) == 0:
+                return self.netData(set(random.sample(D, 5))|S)
+
 
 
 

@@ -12,8 +12,12 @@ def f(i):
     if i == 3:
         P = MatrixProduct([(2, 3), (3, 4), (4, 5)])
         print(P.stateSpace())
+    if i == 4:
+        P = MatrixProduct([(2, 3), (3, 4), (4, 5)])
+        ss = {(1, 2), (3, 4), (5, 6)}
+        print(P.netData(ss))
 
 
 if __name__ == '__main__':
-    f(1)
+    f(4)
 
