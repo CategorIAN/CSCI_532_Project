@@ -2,6 +2,8 @@ from functools import reduce
 import numpy as np
 import random
 import pandas as pd
+from NeuralNet import NeuralNet
+from tail_recursive import tail_recursive
 
 class MatrixProduct:
     def __init__(self, dimensionList):
@@ -42,16 +44,22 @@ class MatrixProduct:
     def deltaStates(self, state, D = None):
         (i, j) = state
         def f(action):
-            k = action
-            return {(i, k), (k + 1, j)} if D is None else {(i, k), (k + 1, j)}.intersection(D)
-        return lambda a: set() if i == j else f
+            if i == j:
+                return set()
+            else:
+                k = action
+                return {(i, k), (k + 1, j)} if D is None else {(i, k), (k + 1, j)}.intersection(D)
+        return f
 
     def actionValue(self, state, D = None):
         dynamic = self.dynamicStd if D is None else lambda s: D[s]
         v = self.v(state)
         def f(action):
-            return sum([dynamic(s) for s in self.deltaStates(state, D)(action)]) + v(action)
-        return lambda a: 0 if state[0] == state[1] else f
+            if state[0] == state[1]:
+                return 0
+            else:
+                return sum([dynamic(s) for s in self.deltaStates(state, D)(action)]) + v(action)
+        return f
 
     def optPair(self, state, D = None):
         if state[0] == state[1]:
@@ -78,20 +86,45 @@ class MatrixProduct:
         states_filtered = [[s] if condition(s) else [] for s in states]
         return reduce(lambda l1, l2: l1 + l2, states_filtered, [])
 
-    def dataFrame(self, states):
-        (iList, jList) = [list(t) for t in list(zip(*states))]
-        return pd.DataFrame({"i": iList, "j": jList})
-
-    def trainData(self, D, eps):
+    def getTrainingData(self, D, eps):
+        @tail_recursive
         def go(S, V, Q):
             if len(Q) == 0:
-                return self.dataFrame(set(random.sample(D.keys(), 5))|S)
+                return dict([(s, self.optValue(s, D)) for s in set(random.sample(D.keys(), min(len(D), 5)))|S])
             else:
                 state = Q[0]
-                action = random.choice(self.actionSpace(state)) if random.random() < eps else self.optAction(state, D)
-                newStates = self.filter(lambda s: s not in V, self.deltaStates(state)(action))
-                return go(S|{state}, V|set(newStates), Q + newStates)
-        return go(set(), {self.finalState}, {self.finalState})
+                possibleActions = self.actionSpace(state)
+                if len(possibleActions) == 0:
+                    newStates = []
+                else:
+                    if random.random() < eps:
+                        action = random.choice(possibleActions)
+                    else:
+                        action = self.optAction(state, D)
+                    newStates = self.filter(lambda s: s not in V, self.deltaStates(state)(action))
+                return go.tail_call(S|{state}, V|set(newStates), Q[1:] + newStates)
+        return go(set(), {self.finalState}, [self.finalState])
+
+
+    def optMults_NN(self, eta, hidden_vector):
+        NN = NeuralNet()
+        @tail_recursive
+        def go(t, D, eps,y, ws):
+            print("-------------------------------------------------------------")
+            print("t: {}".format(t))
+            print("Predicted value from nn is {}.".format(None if y is None else y[self.finalState]))
+            print("Predicted value from D is {}.".format(None if D == {} else D[self.finalState]))
+            if t == 100000:
+                return y[self.finalState]
+            else:
+                trainingData = self.getTrainingData(D, eps)
+                #print("Training Data: {}".format(sorted(list(trainingData.keys()))))
+                (newWs, newY) = NN.epoch(trainingData, eta, hidden_vector, ws)
+                #print("Total Data: {}".format(sorted(list((D|trainingData).keys()))))
+                return go.tail_call(t + 1, D|trainingData, max(0.995 * eps, 0.05), newY, newWs)
+        return go(0, {}, 1, None, None)
+
+
 
 
 
